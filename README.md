@@ -231,7 +231,7 @@ flowchart TD
     - ввиду частых изменений в требованиях и множества проверяемых бизнес-гипотез сервисы доменов Telemetry и DrivingAnalytics должны быть эффективно и легко тестируемы;
     - *не является ключевым атрибутом качества* на старте продукта, так как обеспечивается лучшими практиками разработки ПО: модульность, контейнеризация, CI/CD. Плюс, обеспечивается атрибутом качества *модифицируемость*
 
-![ArchitectureCharacteristicsWorksheet](images\architecture-characteristics-worksheet.jpg)
+![ArchCharacteristicsWorksheet](images\architecture-characteristics-worksheet.jpg)
 
 ### Допущения
 
