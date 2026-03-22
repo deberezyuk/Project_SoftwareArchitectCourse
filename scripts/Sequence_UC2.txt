@@ -1,0 +1,111 @@
+@startuml
+title Сценарий 2.5: Назначение встречи и установка датчика
+
+autonumber
+actor "Клиент" as Client
+actor "Мастер ТО" as Master
+participant "Мобильное приложение" as Mobile
+box "Platform Domain" #LightGreen
+    participant "External API Gateway" as ExtGW
+    participant "BFF (MobileBFF)" as BFF
+    participant "Kafka" as Kafka
+end box
+box "Support Domain" #LightPink
+    participant "Appointment Service" as AppSvc
+    participant "SensorManagement Service" as SensorSvc
+end box
+participant "Notification Service" as Notif
+participant "PolicyManagement Service" as PolicyMgmt
+participant "DrivingAnalytics Service" as DrivingAnalytics
+
+== Назначение встречи ==
+Client -> Mobile : нажимает\n"Записаться на установку"
+Mobile -> ExtGW ++ : GET /api/mobile/centers\n(Authorization)
+ExtGW -> ExtGW : валидация JWT
+ExtGW -> BFF ++ : GET /centers
+BFF -> AppSvc ++ : GET /internal/\ncenters
+AppSvc --> BFF -- : список центров
+BFF --> ExtGW -- : центры
+ExtGW --> Mobile -- : центры
+Client -> Mobile : выбирает центр
+
+Mobile -> ExtGW ++ : GET /api/mobile/slots\n?centerId=...
+ExtGW -> BFF ++ : GET /slots?centerId=...
+BFF -> AppSvc ++ : GET /internal/slots\n?centerId=...
+AppSvc --> BFF -- : слоты
+BFF --> ExtGW -- : слоты
+ExtGW --> Mobile -- : слоты
+
+Client -> Mobile : выбирает слот
+Mobile -> ExtGW ++ : POST /api/mobile/appointments\n{centerId, slotId, vehicleId}
+ExtGW -> AppSvc ++ : POST /appointments
+AppSvc --> ExtGW -- : {appointmentId,\nappointmentNumber, status}
+ExtGW --> Mobile -- : подтверждение
+
+== Асинхронное оповещение ==
+AppSvc -> Kafka ++ : событие AppointmentCreated\n{appointmentId, clientId,\ncenter, slot, vehicleId}
+Kafka -> Notif ++ : потребление
+Notif -> Notif : формирует push и email\nдля мастера и клиента
+Notif --> Kafka -- : ok
+deactivate Notif
+deactivate Kafka
+
+== Мастер подтверждает встречу ==
+note over Mobile: мастер входит в\приложение (роль technician)\nи получает список встреч
+
+Master -> Mobile : выбирает встречу\n, нажимает "Подтвердить"
+Mobile -> ExtGW ++ : PUT /api/technician/\nappointments/{id}/confirm
+ExtGW -> AppSvc ++ : PUT /appointments/\n{id}/confirm
+AppSvc --> ExtGW : ok
+ExtGW --> Mobile -- : ok
+
+AppSvc -> Kafka -- : событие AppointmentConfirmed\n{appointmentId}
+Kafka -> Notif ++ : потребление
+Notif -> Notif : уведомляет клиента
+Notif --> Kafka -- : ok
+deactivate Notif
+deactivate Kafka
+
+== Отклонение и альтернативное предложение (цикл) ==
+note over Mobile: мастер отклоняет встречу\nи предлагает новый слот
+
+== Установка датчика ==
+note over Mobile: клиент приезжает в сервис ТО\nмастер встречает
+Master -> Mobile : отмечает старт\nвстречи
+Mobile -> ExtGW ++ : POST /api/mobile/\nappointments/{id}/start
+ExtGW -> AppSvc ++ : POST /appointments/\n{id}/start
+AppSvc --> ExtGW -- : ok
+ExtGW --> Mobile -- : ok
+
+note over Mobile: мастер сканирует\nштрих-код датчика
+Mobile -> ExtGW ++ : POST /api/mobile/\nsensors/install\n{appointmentId, sensorId}
+ExtGW -> SensorSvc ++ : POST /sensors/install
+SensorSvc -> SensorSvc : проверка идемпотентности\n(датчик свободен)
+SensorSvc -> AppSvc ++ : PUT /internal/appointments/\n{id}/complete
+AppSvc --> SensorSvc -- : ok
+SensorSvc --> ExtGW -- : ok
+ExtGW --> Mobile -- : ok
+
+Client -> Mobile : клиент получает\npush-уведомление,\nподтверждает установку
+Mobile -> ExtGW ++ : POST /api/mobile/appointments\n/{id}/confirm-install
+ExtGW -> AppSvc ++ : POST /appointments/{id}\n/confirm-install
+AppSvc --> ExtGW -- : ok
+ExtGW -> SensorSvc ++ : POST /sensors/{id}\n/confirm-install
+SensorSvc --> ExtGW -- : ok
+ExtGW --> Mobile -- : ok
+
+== Асинхронное уведомление и синхронизация данных ==
+SensorSvc -> Kafka ++ : событие SensorInstalled\n{sensorId, vehicleId, policyId}
+Kafka -> PolicyMgmt ++ : потребление
+PolicyMgmt -> PolicyMgmt : привязывает датчик\nк автомобилю\nв своей БД
+deactivate PolicyMgmt
+
+Kafka -> DrivingAnalytics ++ : потребление
+DrivingAnalytics -> DrivingAnalytics : активирует профиль\nвождения\n(статус "активен")
+deactivate DrivingAnalytics
+
+Kafka -> Notif ++ : потребление
+Notif -> Notif -- : уведомляет клиента\nоб успешной установке
+deactivate Notif
+
+@enduml

@@ -1,0 +1,43 @@
+@startuml
+title Сценарий 3: Сбор телеметрии и формирование поездок
+
+autonumber
+actor "Датчик телеметрии" as Sensor
+box "Telemetry Domain" #FloralWhite
+    participant "Изолированный шлюз\nтелеметрии" as IoTGateway
+    participant "Kafka IoT\n(телеметрия)" as KafkaIoT
+    participant "GatherTelemetry Service" as GatherTelemetry
+    database "Telemetry DB\n(TimescaleDB + PostGIS)" as TelemetryDB
+    participant "FormTripsTelemetry Service" as FormTrips
+end box
+participant "Kafka" as KafkaCorp
+
+== Отправка телеметрии ==
+Sensor -> IoTGateway ++ : MQTT\n(пакет данных)
+IoTGateway -> KafkaIoT ++ : публикация в топик
+deactivate KafkaIoT
+deactivate IoTGateway
+
+== Обработка GatherTelemetry ==
+loop потоковая обработка (консьюмер)
+    KafkaIoT -> GatherTelemetry ++ : потребление сообщения
+    GatherTelemetry -> GatherTelemetry : пакетное накопление\n(по количеству или времени)
+    GatherTelemetry -> TelemetryDB ++ : вставка пакета точек\n(sensorId, timestamp, location, speed, ...)
+    TelemetryDB --> GatherTelemetry -- : подтверждение
+    GatherTelemetry --> KafkaIoT -- : commit
+end
+
+== Формирование поездок ==
+loop каждые N минут
+    FormTrips -> FormTrips : запуск обработки
+    FormTrips -> TelemetryDB ++ : чтение необработанных\nточек телеметрии
+    TelemetryDB --> FormTrips -- : точки без\nпоездки
+    FormTrips -> FormTrips : группировка по\nпоездкам
+    FormTrips -> FormTrips : расчёт базовых\nметрик
+    FormTrips -> TelemetryDB ++ : вставка записей\nо поездках\nс метриками
+    TelemetryDB --> FormTrips -- : подтверждение
+    FormTrips -> KafkaCorp ++ : публикация события
+    deactivate KafkaCorp
+end
+
+@enduml
