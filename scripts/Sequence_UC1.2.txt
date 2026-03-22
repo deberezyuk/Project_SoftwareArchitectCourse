@@ -1,0 +1,99 @@
+@startuml
+title Сценарий 2: Аутентификация и авторизация клиента (с выбором роли и 2FA через SMS)
+
+autonumber
+actor "Клиент" as User
+participant "Мобильное приложение" as Mobile
+box "Platform Domain" #LightGreen
+    participant "Keycloak" as Keycloak
+    participant "External API Gateway" as ExtGW
+    participant "BFF (MobileBFF)" as BFF
+end box
+participant "SMS Provider" as SMSProvider
+box "PolicyManagement Domain" #LightPink
+    participant "Policy Management Service" as PolicyMgmt
+    participant "Insurer Service" as Insurer
+    participant "Vehicle Service" as Vehicle
+end box
+participant "Support Service" as Support
+participant "Notification Service" as Notification
+
+== Регистрация / назначение роли ==
+note over User, Keycloak
+  Роль пользователя назначается в Keycloak:
+  - при регистрации по ссылке (автоматически)
+  - при выборе роли на форме регистрации
+  - администратором вручную
+  Возможно наличие нескольких ролей.
+end note
+
+== Аутентификация (пароль) ==
+User -> Mobile : открывает приложение,\nвводит учётные данные
+Mobile -> Keycloak ++ : OAuth2 Authorization\nCode Flow + PKCE
+Keycloak --> Mobile : redirect с кодом
+Mobile -> Keycloak : обмен кода\nна токены
+
+== 2FA: SMS-код ==
+Keycloak -> Keycloak : генерирует одноразовый код\nдля пользователя
+Keycloak -> SMSProvider ++ : отправить SMS с кодом\nна номер телефона
+SMSProvider --> Keycloak -- : подтверждение отправки
+Keycloak --> Mobile : требуется ввод\nSMS-кода
+Mobile -> Mobile : отображает поле\nввода кода
+User -> Mobile : вводит код\nиз SMS
+Mobile -> Keycloak ++ : отправляет код\nподтверждения
+Keycloak -> Keycloak : проверяет код
+alt код верный
+    Keycloak --> Mobile -- : JWT (access, refresh)\nс ролями в claims
+else код неверный
+    Keycloak --> Mobile -- : ошибка (повторить\nили заблокировать)
+    Mobile -> Mobile : показать ошибку,\nповторный запрос кода
+end
+
+== Выбор роли (если их несколько) ==
+Mobile -> ExtGW ++ : GET /api/mobile/roles\nAuthorization: Bearer JWT
+ExtGW -> BFF ++ : найти пользователя
+BFF -> PolicyMgmt ++ : найти пользователя\nпо email и телефону
+PolicyMgmt --> BFF -- : uuid пользователя
+ExtGW -> ExtGW : локальная валидация JWT,\nизвлечение ролей
+ExtGW -> BFF ++ : GET /roles\n(с заголовком X-User-Roles)
+BFF --> ExtGW -- : список ролей
+ExtGW --> Mobile -- : роли
+
+alt несколько ролей
+    Mobile -> Mobile : показать выбор роли
+    User -> Mobile : выбирает роль
+    Mobile -> ExtGW ++ : POST /api/mobile/select-role\n{ role }
+    ExtGW -> BFF ++ : POST /select-role
+    BFF -> BFF : сохранить активную\nроль в сессии
+    BFF --> ExtGW -- : ok
+    ExtGW --> Mobile -- : ok
+end
+
+== Запрос профиля с учётом выбранной роли ==
+Mobile -> ExtGW ++ : GET /api/mobile/profile\nAuthorization: Bearer JWT
+ExtGW -> ExtGW : локальная валидация JWT,\nизвлечение ролей
+ExtGW -> BFF ++ : GET /profile\nHeaders: X-User-ID, X-User-Roles,\nX-Active-Role (если выбрана)
+
+BFF -> PolicyMgmt ++ : GET /internal/holders/{userId}\n?includeVehicles=true
+PolicyMgmt --> BFF -- : данные клиента\n+ автомобили
+
+BFF -> Insurer ++ : GET /internal/policies?holderId={userId}
+Insurer --> BFF -- : данные полиса
+
+BFF -> Vehicle ++ : GET /internal/vehicle?holderId={userId}
+Vehicle --> BFF -- : данные автомобиля
+
+BFF -> Notification ++ : GET /internal/preferences/{userId}
+Notification --> BFF -- : настройки уведомлений
+
+alt активная роль = "technician"
+    BFF -> Support ++ : GET /internal/technician/{userId}
+    Support --> BFF -- : данные специалиста ТО
+end
+
+BFF -> BFF : агрегация и фильтрация данных\nв зависимости от активной роли
+BFF --> ExtGW -- : единый JSON\nс профилем
+ExtGW --> Mobile -- : ответ
+Mobile --> User : отображение профиля
+
+@enduml

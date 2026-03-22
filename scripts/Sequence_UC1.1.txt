@@ -1,0 +1,65 @@
+@startuml
+title Сценарий 1: Оформление умного полиса
+
+autonumber
+participant "Внешняя фронт-система" as FrontSystem
+box "Platform Domain" #LightGreen
+    participant "External API Gateway" as ExtGW
+    participant "Kafka" as Kafka
+end box
+box "PolicyManagement Domain" #LightPink
+    participant "PolicyManagement Service" as PolicyMgmt
+    participant "Insurer Service" as Insurer
+    participant "Vehicle Service" as Vehicle
+end box
+participant "DrivingProfile Service" as DrivingProfile
+participant "Recommendations Service" as Recommendations
+participant "Notification Service" as Notification
+participant "Омниканальная платформа" as OmniChannel
+participant "SMS Provider" as SMSProvider
+
+== Оформление полиса ==
+FrontSystem -> ExtGW ++ : POST /api/policies\n(данные клиента,\nавто, полиса)
+ExtGW -> ExtGW : локальная валидация JWT\n(токен внешней системы)
+ExtGW -> PolicyMgmt ++ : POST /internal/policies
+
+group Транзакционное создание
+    PolicyMgmt -> Insurer ++ : GET /internal/holders\n?email=...
+    alt клиент существует
+        Insurer --> PolicyMgmt -- : policyholderId
+    else клиент не существует
+        Insurer -> Insurer : создаёт запись
+        Insurer --> PolicyMgmt -- : новый policyholderId
+    end
+
+    PolicyMgmt -> Vehicle ++ : POST /internal/vehicles\n{ policyholderId, vehicleData }
+    Vehicle --> PolicyMgmt -- : vehicleId
+
+    PolicyMgmt -> PolicyMgmt : сохраняет полис\nс policyholderId, vehicleId
+end
+
+PolicyMgmt --> ExtGW -- : { policyId, status: "CREATED" }
+ExtGW --> FrontSystem -- : ответ
+
+== Асинхронная обработка ==
+PolicyMgmt -> Kafka : публикует событие PolicyCreated\n{ policyId, policyholderId,\nvehicleId, phone, email }
+
+Kafka -> DrivingProfile ++ : событие PolicyCreated
+DrivingProfile -> DrivingProfile : создаёт профиль вождения\n(статус "ожидает авторизации")
+deactivate DrivingProfile
+
+Kafka -> Recommendations ++ : событие PolicyCreated
+Recommendations -> Recommendations : создаёт настройки\nпо умолчанию
+deactivate Recommendations
+
+Kafka -> Notification ++ : событие PolicyCreated
+Notification -> Notification : генерирует одноразовый токен\nи ссылку с ролью client
+    Notification -> ExtGW ++ : POST /send\n{ phone, text: ссылка }
+    ExtGW -> OmniChannel ++ : маршрутизация
+    OmniChannel -> SMSProvider ++: отправка SMS
+    SMSProvider --> OmniChannel -- : OK
+    OmniChannel --> ExtGW -- : статус отправки
+    ExtGW --> Notification -- : статус
+deactivate Notification
+
+@enduml
