@@ -331,9 +331,11 @@ graph TD
 ![C1](images/C1.png "C1 Context Diagram")
 
 
-### Контейнеры
+### Контейнеры системы
 
 Функциональная декомпозиция на сервисы внутри выделенных доменов представлена в [ADR-1](ADR/ADR-1-functional-decomposition.md)
+
+![C2](images/C2.jpg "C2 Container Diagram")
 
 ### Sequence-диаграммы
 
