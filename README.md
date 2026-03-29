@@ -381,7 +381,7 @@ graph TD
 
 **Предусловие**: выполнены шаги UC-2-3
 
-При эксплуатации авто датчики отправляют в контур страховщика необходимые данные телеметрии (см. *ASM-1*), которые, по требованиям ИБ, сначала попадают в изолированный во VLAN контур со Шлюзом телеметрии, который маршрутизирует запросы в топик отдельного кластера Kafka, который развернут специально для использования телеметрии IoT в компании. Данные сохраняются отдельным контейнером в БД для данных телеметрии с поддержкой временных рядов и геометок (см. [ADR-5](ADR/ADR-5-db-for-telemetry-data.md)), агрегируются в поездки отдельным сервисом вместе с расчетом базовых метрик стиля вождения (см. [ADR-6](ADR/ADR-6-read-telemetry-form-trips.md)).
+При эксплуатации авто датчики отправляют в контур страховщика необходимые данные телеметрии (см. *ASM-1*), которые, по требованиям ИБ, сначала попадают в изолированный во VLAN контур со Шлюзом телеметрии, который маршрутизирует запросы в топик отдельного кластера Kafka, развернутый специально для использования телеметрии IoT в компании. Данные сохраняются в БД домена телеметрии с поддержкой временных рядов и геометок, которая отвечает требованиям масштабирования и произвожительности. (см. [ADR-5](ADR/ADR-5-db-for-telemetry-data.md)). Отдельный сервис агрегирует данные телеметрии в поездки с расчетом базовых метрик стиля вождения (см. [ADR-6](ADR/ADR-6-read-telemetry-form-trips.md)).
 
 На выходе из данного сценария:
 * данные телеметрии агрегируются по поездкам в системе;
@@ -418,6 +418,80 @@ graph TD
 ![Sequence_UC4.3](images/Sequence_UC4.3.jpg "Формирование рекомендаций")
 
 ### Database-диаграмма
+
+На схеме ниже на логическом уровне с основными объектами представлены БД, используемые в системе. Для каждой БД используется своя БД, в некоторых используются отдельно выделенные схемы и read-реплики для повышения производительности и масштабирования.
+
+<!-- #region mermaid: SH системы умного автострахования -->
+```mermaid
+graph TD
+    %% Telemetry Domain
+    subgraph Telemetry["📦 PostgreSQL 14 + TimescaleDB + PostGIS (Master + Replica)"]
+        T1["Sensor, TelemetryBatch, RawTelemetryPoint"]
+        T2["Read Replica (для чтения)"]
+    end
+
+    subgraph TelemetryArchive["📦 PostgreSQL 14 Archive (данные >1 месяца)"]
+        Z1["Archive (>1 month)"]
+    end
+
+    %% DrivingAnalytics Domain
+    subgraph DrivingAnalytics["📦 PostgreSQL 14 (Master + Read Replica)"]
+        D1["Policyholder, Vehicle, InsurancePolicy"]
+        D2["DrivingStyleProfile, Trip, DrivingMetric"]
+        D3["PricingCalculation"]
+        D4["Read Replica (для отчётов)"]
+    end
+
+    %% PolicyManagement Domain
+    subgraph PolicyMgmt["📦 PostgreSQL 14 (общая)"]
+        P1["Policyholder, Vehicle, InsurancePolicy, Sensor"]
+    end
+
+    %% Support Domain (три схемы в одной БД)
+    subgraph Support["📦 PostgreSQL 14 (схемы: tickets, appointments, sensors)"]
+        S1["SupportTicket, SupportMessage"]
+        S2["Appointment, SensorSpecialist"]
+        S3["SensorInventory"]
+    end
+
+    %% Notifications
+    subgraph Notifications["📦 PostgreSQL 14"]
+        N1["Notification, NotificationTemplate, NotificationPreference"]
+    end
+
+    %% Recommendations
+    subgraph Recommendations["📦 PostgreSQL 14"]
+        R1["RecommendationBatch, DrivingRecommendation, PendingRecommendations"]
+    end
+
+    %% MinIO
+    MinIO[("☁️ MinIO S3\n(geodata, violations)")]
+
+    %% Kafka
+    Bus[("✉️ Kafka Event Bus")]
+
+    %% Связи
+    Telemetry -->|"event"| Bus
+    DrivingAnalytics -->|"event"| Bus
+    Bus -->|"event"| Support
+    Bus -->|"event"| Notifications
+    Recommendations -->|"event"| Bus
+    DrivingAnalytics -.->|"files"| MinIO
+    PolicyMgmt -->|"event"| Bus
+    Telemetry -.->|"files"| MinIO
+
+    %% Стили
+    classDef db fill:#bbdefb,stroke:#0d47a1,stroke-width:2px,color:#000
+    classDef replica fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
+    classDef archive fill:#e0e0e0,stroke:#424242,stroke-width:2px,color:#000
+    classDef bus fill:#f8bbd0,stroke:#880e4f,stroke-width:2px,color:#000
+    classDef minio fill:#c8e6c9,stroke:#1b5e20,stroke-width:2px,color:#000
+
+    class Telemetry,TelemetryArchive,DrivingAnalytics,PolicyMgmt,Support,Notifications,Recommendations db
+    class MinIO minio
+    class Bus bus
+```
+<!-- #endregion -->
 
 ### Deployment-диаграмма
 
