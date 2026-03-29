@@ -1,4 +1,4 @@
-<mxfile host="Electron" modified="2026-03-29T08:10:51.297Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/22.1.2 Chrome/114.0.5735.289 Electron/25.9.4 Safari/537.36" etag="6niC06O8HHRrPkYd3vg7" version="22.1.2" type="device" pages="6">
+<mxfile host="Electron" modified="2026-03-29T09:07:58.655Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/22.1.2 Chrome/114.0.5735.289 Electron/25.9.4 Safari/537.36" etag="i7rnG6fs_-9JfsZ5xrdu" version="22.1.2" type="device" pages="6">
   <diagram id="Mq8T-DgSO9R7OmhDphZd" name="SoftwareArch_DZ_2_C2">
     <mxGraphModel dx="1444" dy="2113" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
@@ -1515,7 +1515,7 @@
     </mxGraphModel>
   </diagram>
   <diagram name="C2" id="ehTcj6DLioq6ReN8-ue4">
-    <mxGraphModel dx="2415" dy="2207" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+    <mxGraphModel dx="2591" dy="2322" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="9sC9D5epUHkarMvsfXjc-0" />
         <mxCell id="9sC9D5epUHkarMvsfXjc-1" parent="9sC9D5epUHkarMvsfXjc-0" />
@@ -1640,9 +1640,6 @@
             </mxGeometry>
           </mxCell>
         </object>
-        <mxCell id="9sC9D5epUHkarMvsfXjc-21" value="ADR1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="9sC9D5epUHkarMvsfXjc-1">
-          <mxGeometry x="1643" y="310" width="60" height="30" as="geometry" />
-        </mxCell>
         <mxCell id="9sC9D5epUHkarMvsfXjc-22" value="ADR6" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="9sC9D5epUHkarMvsfXjc-1">
           <mxGeometry x="310" y="530" width="60" height="30" as="geometry" />
         </mxCell>
