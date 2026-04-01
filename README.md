@@ -421,21 +421,21 @@ graph TD
 
 На схеме ниже на логическом уровне с основными объектами представлены БД, используемые в системе. Для каждой БД используется своя БД, в некоторых используются отдельно выделенные схемы и read-реплики для повышения производительности и масштабирования.
 
-<!-- #region mermaid: SH системы умного автострахования -->
+<!-- #region mermaid: Логическая схема БД -->
 ```mermaid
 graph TD
     %% Telemetry Domain
-    subgraph Telemetry["📦 PostgreSQL 14 + TimescaleDB + PostGIS (Master + Replica)"]
+    subgraph Telemetry["Домен Telemetry: PostgreSQL 14 + TimescaleDB + PostGIS (Master + Replica)"]
         T1["Sensor, TelemetryBatch, RawTelemetryPoint"]
         T2["Read Replica (для чтения)"]
     end
 
-    subgraph TelemetryArchive["📦 PostgreSQL 14 Archive (данные >1 месяца)"]
+    subgraph TelemetryArchive["Домен Telemetry: PostgreSQL 14 Archive (данные >1 месяца)"]
         Z1["Archive (>1 month)"]
     end
 
     %% DrivingAnalytics Domain
-    subgraph DrivingAnalytics["📦 PostgreSQL 14 (Master + Read Replica)"]
+    subgraph DrivingAnalytics["Домен DrivingAnalytics: PostgreSQL 14 (Master + Read Replica)"]
         D1["Policyholder, Vehicle, InsurancePolicy"]
         D2["DrivingStyleProfile, Trip, DrivingMetric"]
         D3["PricingCalculation"]
@@ -443,24 +443,24 @@ graph TD
     end
 
     %% PolicyManagement Domain
-    subgraph PolicyMgmt["📦 PostgreSQL 14 (общая)"]
+    subgraph PolicyMgmt["Домен PolicyManagement: PostgreSQL 14 (общая)"]
         P1["Policyholder, Vehicle, InsurancePolicy, Sensor"]
     end
 
-    %% Support Domain (три схемы в одной БД)
-    subgraph Support["📦 PostgreSQL 14 (схемы: tickets, appointments, sensors)"]
+    %% Support Domain
+    subgraph Support["Домен Support: PostgreSQL 14 (схемы: tickets, appointments, sensors)"]
         S1["SupportTicket, SupportMessage"]
         S2["Appointment, SensorSpecialist"]
         S3["SensorInventory"]
     end
 
     %% Notifications
-    subgraph Notifications["📦 PostgreSQL 14"]
+    subgraph Notifications["Домен Notifications: PostgreSQL 14"]
         N1["Notification, NotificationTemplate, NotificationPreference"]
     end
 
     %% Recommendations
-    subgraph Recommendations["📦 PostgreSQL 14"]
+    subgraph Recommendations["Домен Recommendations: PostgreSQL 14"]
         R1["RecommendationBatch, DrivingRecommendation, PendingRecommendations"]
     end
 
@@ -494,6 +494,14 @@ graph TD
 <!-- #endregion -->
 
 ### Deployment-диаграмма
+
+Для наглядности схема развертывания разделена на 2 уровня:
+* L1: показывает внешние компоненты и их связи. В нашей системе это: изолированны по требованиям ИБ VM для шлюза и кластера Kafka для поступления данных телеметрии; VM для Баз Данных системы; VM для MinIO S3. Остальные компоненты системы развернуты в корпоративном кластере k8s;
+* L2: показывает связи контейнеров системы внутри кластера k8s. Связи с корпоративной Kafka опущены для повышения читабельности. Отдельно выделены централизованные в компании сервисы для логирования, мониторинга и алертинга (ELK, Prometheus, Grafana соответственно). 
+
+![Deployment_L1](images/Deployment_L1.jpg "Deployment_L1")
+
+![Deployment_L2](images/Deployment_L2.jpg "Deployment_L2")
 
 ### Сценарии отказоусточивости
 
